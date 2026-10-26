@@ -1,0 +1,5 @@
+av==19.0.2
+djitellopy==2.5.0
+numpy==2.5.4
+opencv-python==5.0.0.93
+pillow==13.0.0

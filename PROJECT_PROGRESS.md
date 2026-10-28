@@ -360,6 +360,65 @@ Testing with eight cups exposed a real target-switching bug. The screenshots sho
 
 The follow-up test with multiple cups confirmed the improvement: the tracker stayed locked to one cup for the entire hover. It briefly mixed up the target during landing, so multi-cup locking is strongly improved but not yet perfect during the final visual transition. The run also confirmed that the video-stream retry logic recovered after two failed startup attempts, followed by successful takeoff, landing, and stream shutdown.
 
+## `tag.py` created
+
+Created `tag.py` as the next cup-tagging development stage. It is copied from `autonomous_mvmt.py` and retains:
+
+- Cup-only YOLO detection.
+- Multi-candidate target retention.
+- Target lock and smoothing.
+- Camera-relative guidance.
+- Proposed align/descend/hold decisions.
+- Explicit takeoff confirmation and automatic landing.
+
+This stage keeps both movement and physical contact disabled:
+
+```python
+AUTONOMOUS_MOVEMENT_ENABLED = False
+CONTACT_APPROACH_ENABLED = False
+```
+
+The current purpose is to validate the complete “locked target → approach decision” pipeline without intentionally driving the aircraft into a cup. Real contact requires additional safeguards: bounded motion pulses, altitude limits, target-loss landing, emergency stop, obstacle clearance, and a non-breakable test target.
+
+## `tag.py` movement enabled
+
+Per operator request, `tag.py` now has physical movement and contact approach enabled:
+
+```python
+AUTONOMOUS_MOVEMENT_ENABLED = True
+CONTACT_APPROACH_ENABLED = True
+```
+
+The movement logic uses short low-speed pulses:
+
+- Cup left/right: brief lateral correction.
+- Cup centered but small: brief forward approach.
+- Cup centered and large enough: brief downward pulse toward contact.
+- After each pulse: all RC channels are set back to zero.
+- The autonomous approach is limited to 8 seconds, followed by the existing landing cleanup.
+
+This is the first active-contact test and has not been flight-validated. Use a soft, lightweight, non-breakable cup, a large clear area, and keep the video window available for the emergency `q` landing path. If anything behaves unexpectedly, use the Tello emergency stop or power control immediately.
+
+Per operator request, the `tag.py` software battery gate was lowered from 30% to 1%. The script now permits the test when the reported battery is at least 1%; the aircraft may still refuse commands or lose power at a critically low charge.
+
+## `tag.py` control-flow bug fixed
+
+The first active `tag.py` run exposed inherited hover-test mistakes:
+
+- The video still displayed a fixed `HOVER TEST` countdown.
+- The run was still limited to the old short hover duration.
+- The bounding-box drawing block had accidentally been placed after a `break`, so the terminal showed detections and movement while the video showed no cup box.
+
+The script was corrected to:
+
+- Use a 20-second maximum **tag approach timeout**, not a fixed hover-test label.
+- Draw the locked cup box and action guidance before the target-loss branch.
+- Stop movement and land if a previously locked target is lost.
+- Display `TAG APPROACH: ...s limit` in the video window.
+- Print `Autonomous tag approach stopped.` during cleanup.
+
+The file passes a read-only Python syntax check. The next active run should visually show the locked cup box and movement action, matching the terminal logs.
+
 ## Autonomous guidance decision layer added
 
 After a successful guarded hover showed guidance such as `target left, target below`, `autonomous_mvmt.py` now adds a dry-run decision layer:

@@ -16,6 +16,8 @@ LOCK_MAX_CENTER_DISTANCE = 0.25
 HOVER_SECONDS = 10
 AUTONOMOUS_MOVEMENT_ENABLED = False
 TARGET_CENTER_TOLERANCE = 0.12
+TARGET_SIZE_THRESHOLD = 0.18
+AUTONOMY_TIMEOUT_SECONDS = 10
 
 
 def cup_guidance(box, frame_width, frame_height):
@@ -44,6 +46,28 @@ def cup_guidance(box, frame_width, frame_height):
         vertical = "target below"
 
     return horizontal, vertical, horizontal_error, vertical_error
+
+
+def planned_action(box, frame_width, frame_height):
+    """Choose a cautious next action without sending it to the aircraft."""
+    horizontal, vertical, horizontal_error, vertical_error = cup_guidance(
+        box,
+        frame_width,
+        frame_height,
+    )
+    x1, y1, x2, y2 = box
+    target_area = ((x2 - x1) * (y2 - y1)) / (frame_width * frame_height)
+
+    if horizontal_error < -TARGET_CENTER_TOLERANCE:
+        action = "WOULD MOVE LEFT"
+    elif horizontal_error > TARGET_CENTER_TOLERANCE:
+        action = "WOULD MOVE RIGHT"
+    elif target_area < TARGET_SIZE_THRESHOLD:
+        action = "WOULD DESCEND SLOWLY"
+    else:
+        action = "HOLD POSITION / STOP"
+
+    return action, horizontal, vertical, horizontal_error, vertical_error, target_area
 
 
 def intersection_over_union(first_box, second_box):
@@ -150,7 +174,10 @@ def main():
                 classes=[TARGET_CLASS_ID],
                 conf=CONFIDENCE_THRESHOLD,
                 iou=0.45,
-                max_det=1,
+                # Keep multiple cup candidates so the lock can compare them
+                # against the original target instead of receiving only the
+                # currently strongest cup.
+                max_det=5,
                 verbose=False,
             )
 
@@ -239,6 +266,11 @@ def main():
                     frame.shape[1],
                     frame.shape[0],
                 )
+                action, _, _, _, _, target_area = planned_action(
+                    locked_box,
+                    frame.shape[1],
+                    frame.shape[0],
+                )
                 cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 220, 180), 3)
                 cv2.putText(
                     annotated,
@@ -246,6 +278,16 @@ def main():
                     (x1, max(30, y1 - 10)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.9,
+                    (0, 220, 180),
+                    2,
+                    cv2.LINE_AA,
+                )
+                cv2.putText(
+                    annotated,
+                    f"{action} | size {target_area:.3f}",
+                    (12, 66),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.65,
                     (0, 220, 180),
                     2,
                     cv2.LINE_AA,
@@ -258,7 +300,8 @@ def main():
                         f"Cup locked: {locked_confidence:.2f} "
                         f"(missed for {max(0.0, now - last_seen):.1f}s); "
                         f"guidance: {horizontal}, {vertical} "
-                        f"error=({horizontal_error:.2f}, {vertical_error:.2f})"
+                        f"error=({horizontal_error:.2f}, {vertical_error:.2f}); "
+                        f"action: {action}; size={target_area:.3f}"
                     )
                 else:
                     print("Cup locked: none")

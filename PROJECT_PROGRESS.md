@@ -354,6 +354,24 @@ AUTONOMOUS_MOVEMENT_ENABLED = False
 
 This first stage validates target guidance while airborne without sending lateral, vertical, or touch commands. Approach-to-contact behavior should only be enabled after the guidance is reliable and emergency-stop, altitude, obstacle, and contact safeguards are added.
 
+Testing with eight cups exposed a real target-switching bug. The screenshots showed the lock moving from a light-colored cup near the lower center to a blue cup on the right. The cause was `max_det=1`: YOLO returned only one cup candidate, so the lock could not compare the original target against other visible cups.
+
+`autonomous_mvmt.py` now requests up to five cup candidates per frame. During initial acquisition it can still choose the strongest candidate, but after locking it can compare all candidates and keep the one with the best spatial match to the original target. This should prevent an unrelated cup from replacing the original merely because it has higher confidence.
+
+The follow-up test with multiple cups confirmed the improvement: the tracker stayed locked to one cup for the entire hover. It briefly mixed up the target during landing, so multi-cup locking is strongly improved but not yet perfect during the final visual transition. The run also confirmed that the video-stream retry logic recovered after two failed startup attempts, followed by successful takeoff, landing, and stream shutdown.
+
+## Autonomous guidance decision layer added
+
+After a successful guarded hover showed guidance such as `target left, target below`, `autonomous_mvmt.py` now adds a dry-run decision layer:
+
+- Cup left of center: reports `WOULD MOVE LEFT`.
+- Cup right of center: reports `WOULD MOVE RIGHT`.
+- Cup centered but visually small: reports `WOULD DESCEND SLOWLY`.
+- Cup centered and visually large enough: reports `HOLD POSITION / STOP`.
+- The cup's relative image area is printed as `size=...` and shown in the video window.
+
+This implements the intuition of a cautious pilot making one decision at a time and checking the camera again. Physical movement remains disabled; no lateral, vertical, or descent command is sent. The dry-run stage must be tested first before any movement gate is considered.
+
 ## Flight incident: controlled hover test
 
 On 2026-10-28, `controlled_hover_test.py` received `takeoff: ok`, but the aircraft lifted off sideways and hit furniture. The automatic landing command then returned repeated `error` responses, likely because the aircraft had lost its normal flight/command state after the impact. The script's destructor attempted additional landing commands during shutdown.

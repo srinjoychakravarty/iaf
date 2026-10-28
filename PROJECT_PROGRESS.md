@@ -195,3 +195,111 @@ The next script should:
 - Never issue flight commands
 
 The drone should remain on the floor for the first real-time video test.
+
+## Grounded live YOLO stream completed
+
+`tello_yolo_live.py` was run successfully with the drone grounded. The stream started with:
+
+```text
+Response streamon: 'ok'
+```
+
+The live window remained active until `q` was pressed. Cleanup completed correctly:
+
+```text
+Response streamoff: 'ok'
+Live stream stopped. Drone remained grounded.
+```
+
+The model detected a changing range of COCO classes while the camera view changed, including chair, vase, cup, person, bottle, TV, laptop, car, airplane, traffic light, toilet, umbrella, suitcase, and boat. It also correctly reported periods with no detections.
+
+Some low-confidence labels were clearly false positives, which is expected from the small general-purpose `yolov8n.pt` model. The next perception improvement should apply a confidence threshold and optionally focus on a target class such as `cup`.
+
+## Detection confidence threshold implemented
+
+`tello_yolo_live.py` now defines:
+
+```python
+CONFIDENCE_THRESHOLD = 0.50
+```
+
+The YOLO call passes `conf=CONFIDENCE_THRESHOLD`, so detections below 50% confidence are excluded from the displayed boxes and terminal output.
+
+The threshold was subsequently raised to `0.68` to exclude detections at 67% or lower, including observed false positives such as knife 0.52, vase 0.59, and train 0.57. The script now also catches `KeyboardInterrupt`, so Ctrl-C exits cleanly after the existing stream cleanup.
+
+The `q` key is handled by OpenCV and requires the live video window to have keyboard focus. Pressing `q` in the terminal may simply print `q` to the shell and will not stop the OpenCV loop.
+
+## Latest YOLO results
+
+The grounded YOLO test worked successfully against a cup in the Tello camera frame:
+
+```text
+Detected: cup (0.94)
+[SUCCESS] Cup detected.
+```
+
+A later annotated frame contained these detections:
+
+- `cup`: 78% confidence
+- `cup`: 49% confidence
+- `bottle`: 30% confidence
+
+The partially visible label ending in `ble 0.30` was almost certainly `bottle 0.30`. The text was clipped or overlapped because the bounding box touched the top/left edge of the image.
+
+The two cup detections may represent duplicate detections of the same object or two cup-like regions. Confidence is a model score, not a guaranteed probability. Low-confidence detections can later be filtered with a confidence threshold.
+
+## YOLO output improvements
+
+`tello_yolo_test.py` was updated to:
+
+- Save structured detections to `tello_yolo_result.json`.
+- Include label, confidence, confidence percentage, and bounding-box coordinates.
+- Add a readable black legend panel beneath the annotated image.
+- Keep the original YOLO bounding-box annotations.
+
+Run the updated grounded test with:
+
+```bash
+cd /Users/srinjoychakravarty/Downloads/iaf
+source vision-venv/bin/activate
+python tello_yolo_test.py
+open tello_yolo_result.jpg
+open tello_yolo_result.json
+```
+
+## GitHub backup
+
+GitHub CLI authentication succeeded for `srinjoychakravarty`. The repository remote was changed from HTTPS to SSH:
+
+```text
+git@github.com:srinjoychakravarty/iaf.git
+```
+
+The repository push worked after changing the remote to SSH. Future pushes should use:
+
+```bash
+git push
+```
+
+## Intermittent Tello connection issue
+
+After several successful YOLO runs, one run failed during the initial SDK handshake:
+
+```text
+Aborting command 'command'. Did not receive a response after 7 seconds
+```
+
+This occurred before the camera or YOLO stages and indicates a temporary Tello Wi-Fi/UDP connection problem, not a YOLO problem. The recommended recovery is:
+
+1. Stop the script.
+2. Power-cycle the Tello.
+3. Reconnect the Mac to `TELLO-E9E48F`.
+4. Confirm connectivity with:
+
+```bash
+ping -c 3 192.168.10.1
+```
+
+5. Run the script again.
+
+The repeated macOS `AVFFrameReceiver` and `AVFAudioReceiver` duplicate-library warnings remain harmless so far; camera and YOLO processing continued to work despite them.

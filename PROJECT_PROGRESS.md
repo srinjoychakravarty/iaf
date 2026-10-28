@@ -336,6 +336,24 @@ The aircraft still did not rise in a perfectly vertical line and showed some lat
 
 This confirms the perception-during-hover pipeline, but not reliable flight stabilization. Autonomous movement toward a cup remains paused until takeoff and hover drift are understood.
 
+## Autonomous movement development scaffold
+
+Created `autonomous_mvmt.py` as the next-stage development script. It is copied from the controlled hover pipeline and adds camera-relative cup guidance:
+
+- Reports whether the locked cup is left, right, or centered relative to the camera.
+- Reports whether it is above, below, or centered vertically.
+- Reports normalized horizontal and vertical image-error values.
+- Displays this guidance beside the locked cup box.
+- Keeps the takeoff, hover, YOLO, lock, and automatic-landing safeguards.
+
+Actual autonomous movement is intentionally disabled with:
+
+```python
+AUTONOMOUS_MOVEMENT_ENABLED = False
+```
+
+This first stage validates target guidance while airborne without sending lateral, vertical, or touch commands. Approach-to-contact behavior should only be enabled after the guidance is reliable and emergency-stop, altitude, obstacle, and contact safeguards are added.
+
 ## Flight incident: controlled hover test
 
 On 2026-10-28, `controlled_hover_test.py` received `takeoff: ok`, but the aircraft lifted off sideways and hit furniture. The automatic landing command then returned repeated `error` responses, likely because the aircraft had lost its normal flight/command state after the impact. The script's destructor attempted additional landing commands during shutdown.

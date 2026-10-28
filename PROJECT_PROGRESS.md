@@ -229,6 +229,42 @@ The threshold was subsequently raised to `0.68` to exclude detections at 67% or 
 
 The `q` key is handled by OpenCV and requires the live video window to have keyboard focus. Pressing `q` in the terminal may simply print `q` to the shell and will not stop the OpenCV loop.
 
+## Dedicated cup detector
+
+Created `tello_yolo_live_cup.py` as a focused version of the live detector. It uses the YOLO COCO class ID for `cup` (41), applies the 0.68 confidence threshold, displays only cup boxes, and reports only cup detections. It remains grounded-only and supports both `q` in the focused video window and clean Ctrl-C shutdown.
+
+The dedicated cup detector now also reduces duplicate and unstable detections by:
+
+- Limiting YOLO to one cup detection per frame with `max_det=1`.
+- Using IoU non-maximum suppression with `iou=0.45`.
+- Requiring three confirming frames before displaying a stable cup box.
+- Smoothing bounding-box coordinates across frames.
+- Keeping a stable box briefly through up to five missed frames before clearing it.
+- Drawing only the stabilized cup box rather than every raw detection.
+
+## Cup-lock behavior improved
+
+Six manual tests showed that the previous frame-based persistence was too short: the box disappeared almost immediately during brief occlusion or temporary confidence drops. The terminal also showed `0 confirming frames` while a previous stable box was still being displayed, which made the state confusing.
+
+`tello_yolo_live_cup.py` was improved again:
+
+- Cup confidence threshold is now `0.55`, reducing dropouts while still filtering weaker detections.
+- Persistence is time-based: a locked cup is retained for up to 1.5 seconds without a matching detection.
+- The detector now chooses a new cup only during initial acquisition.
+- Once locked, it selects the detection with the best IoU overlap against the existing box, rather than switching to whichever cup has the highest confidence.
+- The display label now says `locked`.
+- The bounding box continues to be smoothed.
+
+Expected terminal states now look like:
+
+```text
+Cup locked: none
+Cup locked: 0.89 (acquisition frames: 3)
+Cup locked: 0.92 (acquisition frames: 3)
+```
+
+The 1.5-second lock timeout is intended as a perception aid during future flight tests; it is not yet autonomous flight logic.
+
 ## Latest YOLO results
 
 The grounded YOLO test worked successfully against a cup in the Tello camera frame:

@@ -9,9 +9,10 @@ MODEL_PATH = "yolov8n.pt"
 CONFIDENCE_THRESHOLD = 0.55
 TARGET_CLASS_ID = 41  # COCO class 41 is cup.
 STABLE_FRAMES_REQUIRED = 3
-MAX_MISSED_SECONDS = 1.5
+MAX_MISSED_SECONDS = 3.0
 BOX_SMOOTHING = 0.65
-LOCK_MIN_IOU = 0.15
+LOCK_MIN_IOU = 0.05
+LOCK_MAX_CENTER_DISTANCE = 0.25
 
 
 def intersection_over_union(first_box, second_box):
@@ -32,6 +33,14 @@ def intersection_over_union(first_box, second_box):
     union_area = first_area + second_area - intersection_area
 
     return intersection_area / union_area if union_area else 0.0
+
+
+def normalized_center_distance(first_box, second_box, frame_width, frame_height):
+    first_center = ((first_box[0] + first_box[2]) / 2, (first_box[1] + first_box[3]) / 2)
+    second_center = ((second_box[0] + second_box[2]) / 2, (second_box[1] + second_box[3]) / 2)
+    dx = (first_center[0] - second_center[0]) / frame_width
+    dy = (first_center[1] - second_center[1]) / frame_height
+    return (dx * dx + dy * dy) ** 0.5
 
 
 def main():
@@ -112,12 +121,28 @@ def main():
                 matching_detections = [
                     detection
                     for detection in detections
-                    if intersection_over_union(locked_box, detection[0]) >= LOCK_MIN_IOU
+                    if (
+                        intersection_over_union(locked_box, detection[0]) >= LOCK_MIN_IOU
+                        or normalized_center_distance(
+                            locked_box,
+                            detection[0],
+                            frame.shape[1],
+                            frame.shape[0],
+                        ) <= LOCK_MAX_CENTER_DISTANCE
+                    )
                 ]
                 if matching_detections:
                     selected_detection = max(
                         matching_detections,
-                        key=lambda detection: intersection_over_union(locked_box, detection[0]),
+                        key=lambda detection: (
+                            intersection_over_union(locked_box, detection[0]),
+                            -normalized_center_distance(
+                                locked_box,
+                                detection[0],
+                                frame.shape[1],
+                                frame.shape[0],
+                            ),
+                        ),
                     )
             elif locked_box is None and detections:
                 selected_detection = detections[0]
@@ -177,7 +202,7 @@ def main():
                 if locked_box is not None:
                     print(
                         f"Cup locked: {locked_confidence:.2f} "
-                        f"(acquisition frames: {candidate_hits})"
+                        f"(missed for {max(0.0, now - last_seen):.1f}s)"
                     )
                 else:
                     print("Cup locked: none")
@@ -189,13 +214,10 @@ def main():
                 break
 
     finally:
-        if stream_started:
-            try:
-                drone.streamoff()
-            except Exception:
-                pass
-
-        drone.end()
+        try:
+            drone.end()
+        except BaseException:
+            pass
         cv2.destroyAllWindows()
         print("Cup detection stopped. Drone remained grounded.")
 

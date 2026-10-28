@@ -2,6 +2,18 @@
 
 Date: 2026-10-26
 
+## Standing collaboration instruction
+
+For every future code change, explain the change in intuitive, layman-friendly terms. Each explanation should cover:
+
+1. What the code changed.
+2. What previous weakness, bug, or limitation it addresses, if any.
+3. How the new behavior works conceptually.
+4. What new feature or capability it adds.
+5. How to test the change and what behavior/output to expect.
+
+Use concrete examples from the drone, camera, YOLO, detection, tracking, and flight context whenever relevant. Do not only provide a technical diff or command; explain the practical meaning of the change.
+
 ## Drone identification
 
 The photographs in this folder identify the aircraft as a **RoboMaster TT (Tello Talent)**.
@@ -264,6 +276,18 @@ Cup locked: 0.92 (acquisition frames: 3)
 ```
 
 The 1.5-second lock timeout is intended as a perception aid during future flight tests; it is not yet autonomous flight logic.
+
+Follow-up testing showed that the cup often reacquired instead of staying locked while moving farther away, and brief hand occlusions frequently cleared the box. The likely causes were the short timeout relative to inference timing and strict overlap matching when the cup's box changes size with distance.
+
+The tracker was adjusted again:
+
+- Lock grace period increased from 1.5 to 3.0 seconds.
+- IoU matching relaxed to 0.05.
+- A normalized center-distance fallback allows the target box to change size while remaining spatially nearby.
+- Terminal logs now report `missed for Xs` instead of the misleading `acquisition frames: 3`.
+- Cleanup now suppresses secondary Ctrl-C errors caused by repeated `streamoff` calls during shutdown.
+
+The latest commit was pushed to GitHub as `3f1c2dd` (`target locking`).
 
 ## Latest YOLO results
 

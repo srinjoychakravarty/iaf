@@ -289,6 +289,61 @@ The tracker was adjusted again:
 
 The latest commit was pushed to GitHub as `3f1c2dd` (`target locking`).
 
+## Controlled hover test created
+
+Created `controlled_hover_test.py` from the cup detector. It adds the first flight-stage experiment without autonomous movement:
+
+- Connects and starts the camera stream.
+- Requires the operator to type `TAKEOFF` explicitly.
+- Refuses to fly below 30% battery.
+- Takes off through Python.
+- Keeps YOLO cup perception running for a 10-second stationary hover.
+- Shows a countdown in the video window.
+- Lands automatically when the timer ends or when `q` is pressed.
+- Lands in cleanup if an interruption occurs after takeoff.
+- Issues no forward, backward, left, right, up, down, or yaw commands.
+
+Run it only in a clear indoor area with the drone on a level surface:
+
+```bash
+cd /Users/srinjoychakravarty/Downloads/iaf
+source vision-venv/bin/activate
+python controlled_hover_test.py
+```
+
+The script first asks:
+
+```text
+Type TAKEOFF and press Enter to begin the 10-second hover test:
+```
+
+The test is intended to validate that the aircraft can hover while the camera and cup detector remain active. It is not yet an autonomous navigation test.
+
+## Hover retest result
+
+After changing to a yoga-mat takeoff area, the controlled hover test improved:
+
+- Battery: 84%.
+- `takeoff` returned `ok`.
+- The drone remained airborne for the timed test.
+- YOLO perception continued during flight.
+- The cup tracker locked onto one of eight cups visible around the mat.
+- `land` returned `ok`.
+- `streamoff` returned `ok`.
+- Cleanup completed without the earlier repeated-landing traceback.
+
+The aircraft still did not rise in a perfectly vertical line and showed some lateral drift. The black yoga mat is less reflective than the previous floor, but because it is mostly uniform black it may still be a weak Vision Positioning surface. A matte surface with visible contrasting texture is preferable.
+
+This confirms the perception-during-hover pipeline, but not reliable flight stabilization. Autonomous movement toward a cup remains paused until takeoff and hover drift are understood.
+
+## Flight incident: controlled hover test
+
+On 2026-10-28, `controlled_hover_test.py` received `takeoff: ok`, but the aircraft lifted off sideways and hit furniture. The automatic landing command then returned repeated `error` responses, likely because the aircraft had lost its normal flight/command state after the impact. The script's destructor attempted additional landing commands during shutdown.
+
+Flight testing is paused until the aircraft and environment are checked. Do not rerun the hover script yet.
+
+The official Tello manual says the underside Vision Positioning System helps maintain position, but its performance depends on the surface. It can be affected by monochrome, highly reflective, transparent, moving, or otherwise unsuitable surfaces; when unavailable, the aircraft enters Attitude mode and cannot hold position reliably. The glossy/reflection-heavy floor used in earlier camera tests may therefore be unsuitable for a first hover.
+
 ## Latest YOLO results
 
 The grounded YOLO test worked successfully against a cup in the Tello camera frame:
